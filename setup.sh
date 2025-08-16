@@ -2,7 +2,33 @@
 
 # Python Project Template Setup Script
 # Creates conda environment and installs all dependencies
-# Usage: ./setup.sh [project_name] [python_version]
+#
+# PREREQUISITES:
+# - conda (miniconda/anaconda) must be installed and available in PATH
+#
+# USAGE:
+#   ./setup.sh [project_name] [python_version]
+#
+# PARAMETERS:
+#   project_name   : Name of your project (optional, defaults to current folder name)
+#   python_version : Python version to use (optional, defaults to 3.11)
+#
+# EXAMPLES:
+#   # Use defaults (folder name + Python 3.11):
+#   ./setup.sh
+#
+#   # Specify project name only (uses Python 3.11):
+#   ./setup.sh my_awesome_project
+#
+#   # Specify both project name and Python version:
+#   ./setup.sh my_awesome_project 3.12
+#   ./setup.sh data_analysis_tool 3.10
+#
+# WHAT THIS SCRIPT DOES:
+# 1. Updates template files (pyproject.toml, environment.yml, README.md) with your project info
+# 2. Creates project directory structure (package, tests, docs folders)
+# 3. Creates conda environment with specified Python version
+# 4. Installs poetry and all dependencies
 
 set -e
 
@@ -44,8 +70,6 @@ rm README.md.bak
 # Create project structure
 echo "Creating project structure..."
 mkdir -p "$MODULE_NAME"
-mkdir -p tests
-mkdir -p docs
 
 # Create module __init__.py
 cat > "$MODULE_NAME/__init__.py" << EOF
@@ -117,19 +141,28 @@ fi
 echo "Installing Python dependencies with Poetry..."
 poetry install
 
+# Clean up template files to keep project clean
+echo "Cleaning up template files..."
+rm -f TEMPLATE_README.md
+rm -f setup.sh
+
 echo ""
 echo "✅ Setup completed successfully!"
 echo ""
+echo "Project '$PROJECT_NAME' is ready for development!"
+echo ""
 echo "Project structure created:"
 echo "  $MODULE_NAME/          # Main package"
-echo "  tests/                # Test files"
-echo "  docs/                 # Documentation"
 echo ""
-echo "To use the environment:"
-echo "  conda activate $CONDA_ENV_NAME"
+echo "Next steps:"
+echo "  1. Activate your environment: conda activate $CONDA_ENV_NAME"
+echo "  2. Customize your README.md with project details"
+echo "  3. Start coding in $MODULE_NAME/"
+echo "  4. Write tests in tests/"
 echo ""
-echo "To run tests:"
-echo "  pytest"
-echo ""
-echo "To run your main module:"
-echo "  python -m $MODULE_NAME.main"
+echo "Development commands:"
+echo "  pytest                    # Run tests"
+echo "  black .                   # Format code"
+echo "  ruff check .              # Lint code"
+echo "  mypy $MODULE_NAME         # Type check"
+echo "  python -m $MODULE_NAME.main  # Run your module"
