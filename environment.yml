@@ -1,0 +1,10 @@
+name: {{PROJECT_NAME}}
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python={{PYTHON_VERSION}}
+  - pip
+  - poetry
+variables:
+  CONDA_ENV_NAME: {{PROJECT_NAME}}
