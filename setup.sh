@@ -1,42 +1,62 @@
 #!/bin/bash
+set -euo pipefail
 
 # Python Project Template Setup Script
-# Creates conda environment and installs all dependencies
-#
-# PREREQUISITES:
-# - conda (miniconda/anaconda) must be installed and available in PATH
-#
-# USAGE:
-#   ./setup.sh [project_name] [python_version]
-#
-# PARAMETERS:
-#   project_name   : Name of your project (optional, defaults to current folder name)
-#   python_version : Python version to use (optional, defaults to 3.11)
-#
-# EXAMPLES:
-#   # Use defaults (folder name + Python 3.11):
-#   ./setup.sh
-#
-#   # Specify project name only (uses Python 3.11):
-#   ./setup.sh my_awesome_project
-#
-#   # Specify both project name and Python version:
-#   ./setup.sh my_awesome_project 3.12
-#   ./setup.sh data_analysis_tool 3.10
-#
-# WHAT THIS SCRIPT DOES:
-# 1. Updates template files (pyproject.toml, environment.yml, README.md) with your project info
-# 2. Creates project directory structure (package, tests, docs folders)
-# 3. Creates conda environment with specified Python version
-# 4. Installs poetry and all dependencies
+# Usage:
+#   ./setup.sh                # name = folder, python = 3.11
+#   ./setup.sh myproj 3.12    # positional
+#   ./setup.sh --python 3.12  # flags
+#   ./setup.sh -n myproj -p 3.10
+#   ./setup.sh myproj --python 3.12
 
-set -e
+show_help() {
+  cat <<'USAGE'
+Usage: setup.sh [options] [project_name] [python_version]
 
-# Get parameters or use defaults
-PROJECT_NAME=${1:-$(basename "$PWD")}
-PYTHON_VERSION=${2:-"3.11"}
+Options:
+  -n, --name <name>       Project name (overrides positional)
+  -p, --python <version>  Python version (overrides positional)
+  -h, --help              Show this help
 
-# Derived variables
+Examples:
+  ./setup.sh
+  ./setup.sh myproj 3.12
+  ./setup.sh --python 3.12
+  ./setup.sh --name myproj --python 3.10
+USAGE
+}
+
+# --- Parse args (flags + positionals) ---
+PROJECT_NAME_FLAG=""
+PYTHON_VERSION_FLAG=""
+POSITIONALS=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--name)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value"; exit 1; }
+      PROJECT_NAME_FLAG="$2"; shift 2;;
+    -p|--python)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value"; exit 1; }
+      PYTHON_VERSION_FLAG="$2"; shift 2;;
+    -h|--help) show_help; exit 0;;
+    --) shift; break;;
+    -*) echo "Error: unknown option '$1'"; exit 1;;
+    *) POSITIONALS+=("$1"); shift;;
+  esac
+done
+# Append any args after lone "--"
+while [[ $# -gt 0 ]]; do POSITIONALS+=("$1"); shift; done
+
+# Defaults
+DEFAULT_NAME="$(basename "$PWD")"
+DEFAULT_PY="3.11"
+
+# Resolve final values (flag > positional > default)
+PROJECT_NAME="${PROJECT_NAME_FLAG:-${POSITIONALS[0]:-$DEFAULT_NAME}}"
+PYTHON_VERSION="${PYTHON_VERSION_FLAG:-${POSITIONALS[1]:-$DEFAULT_PY}}"
+
+# --- Derived ---
 PROJECT_DIR="$PWD"
 CONDA_ENV_NAME="$PROJECT_NAME"
 MODULE_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]' | tr '-' '_')
@@ -48,100 +68,82 @@ echo "Conda environment: $CONDA_ENV_NAME"
 echo "Module name: $MODULE_NAME"
 echo ""
 
-# Update template files with project-specific values
 echo "Updating template files with project information..."
-
-# Update environment.yml
+# environment.yml
 sed -i.bak "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" environment.yml
 sed -i.bak "s/{{PYTHON_VERSION}}/$PYTHON_VERSION/g" environment.yml
-rm environment.yml.bak
+rm -f environment.yml.bak
 
-# Update pyproject.toml
+# pyproject.toml
 sed -i.bak "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" pyproject.toml
 sed -i.bak "s/{{MODULE_NAME}}/$MODULE_NAME/g" pyproject.toml
 sed -i.bak "s/{{PYTHON_VERSION}}/$PYTHON_VERSION/g" pyproject.toml
-rm pyproject.toml.bak
+rm -f pyproject.toml.bak
 
-# Update README.md
+# README.md
 sed -i.bak "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" README.md
 sed -i.bak "s/{{MODULE_NAME}}/$MODULE_NAME/g" README.md
-rm README.md.bak
+rm -f README.md.bak
 
-# Create project structure
 echo "Creating project structure..."
 mkdir -p "$MODULE_NAME"
 
-# Create module __init__.py
 cat > "$MODULE_NAME/__init__.py" << EOF
 """$PROJECT_NAME package."""
 
 __version__ = "0.1.0"
 EOF
 
-# Create main module file
 cat > "$MODULE_NAME/main.py" << EOF
 """Main module for $PROJECT_NAME."""
-
 
 def hello() -> str:
     """Return a hello message."""
     return "Hello from $PROJECT_NAME!"
 
-
 if __name__ == "__main__":
     print(hello())
 EOF
 
-# Create basic test file
+mkdir -p tests
 cat > "tests/test_main.py" << EOF
 """Tests for $MODULE_NAME.main module."""
 
 import pytest
 from $MODULE_NAME.main import hello
 
-
 def test_hello():
-    """Test the hello function."""
     result = hello()
     assert isinstance(result, str)
     assert "$PROJECT_NAME" in result
 EOF
-
-# Create tests/__init__.py
 touch "tests/__init__.py"
 
-# Check if conda is available
 if ! command -v conda &> /dev/null; then
-    echo "Error: conda is not installed or not in PATH"
-    echo "Please install conda/miniconda first"
-    exit 1
+  echo "Error: conda is not installed or not in PATH"
+  exit 1
 fi
 
-# Create conda environment if it doesn't exist
-if ! conda env list | grep -q "$CONDA_ENV_NAME"; then
-    echo "Creating conda environment from environment.yml..."
-    conda env create -f environment.yml
-    echo "✅ Conda environment created successfully"
+if ! conda env list | grep -qE "^\s*$CONDA_ENV_NAME\s"; then
+  echo "Creating conda environment from environment.yml..."
+  conda env create -f environment.yml
+  echo "✅ Conda environment created successfully"
 else
-    echo "✅ Conda environment '$CONDA_ENV_NAME' already exists"
+  echo "✅ Conda environment '$CONDA_ENV_NAME' already exists"
 fi
 
-# Activate conda environment
 echo "Activating conda environment: $CONDA_ENV_NAME"
 eval "$(conda shell.bash hook)"
 conda activate "$CONDA_ENV_NAME"
 
-# Check if poetry is available in the environment
 if ! command -v poetry &> /dev/null; then
-    echo "Installing poetry in conda environment..."
-    conda install -c conda-forge poetry -y
+  echo "Installing poetry in conda environment..."
+  conda install -c conda-forge poetry -y
 fi
 
-# Install dependencies with Poetry
 echo "Installing Python dependencies with Poetry..."
 poetry install
 
-# Clean up template files to keep project clean
 echo "Cleaning up template files..."
 rm -f TEMPLATE_README.md
 rm -f setup.sh
@@ -155,14 +157,9 @@ echo "Project structure created:"
 echo "  $MODULE_NAME/          # Main package"
 echo ""
 echo "Next steps:"
-echo "  1. Activate your environment: conda activate $CONDA_ENV_NAME"
-echo "  2. Customize your README.md with project details"
+echo "  1. conda activate $CONDA_ENV_NAME"
+echo "  2. Edit README.md"
 echo "  3. Start coding in $MODULE_NAME/"
 echo "  4. Write tests in tests/"
 echo ""
-echo "Development commands:"
-echo "  pytest                    # Run tests"
-echo "  black .                   # Format code"
-echo "  ruff check .              # Lint code"
-echo "  mypy $MODULE_NAME         # Type check"
-echo "  python -m $MODULE_NAME.main  # Run your module"
+echo "Dev commands: pytest | black . | ruff check . | mypy $MODULE_NAME | python -m $MODULE_NAME.main"
